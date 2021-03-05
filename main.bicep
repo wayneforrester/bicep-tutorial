@@ -1,24 +1,35 @@
-param location string = resourceGroup().location
-param namePrefix string = 'stg'
+// As target scope is to the subscription, to deploy need to use the subscription deployment command:
+// az deployment sub create ...
+targetScope = 'subscription' // specify the subscription as the target scope, target scope of deployment defaults to a resource group if not specified
 
-param globalRedundancy bool = true // defaults to true but can be overridden
+param deployStorate bool = true
 
-// var storageSku = 'Standard_LRS' // declare veriable and assign value
-var storageAccountName = '${namePrefix}${uniqueString(resourceGroup().id)}' // example of using string interpolation
-
-resource stg 'Microsoft.Storage/storageAccounts@2019-06-01' = {
-  name: storageAccountName // uses varibale defined above created via a function that uses string interpolation
-  location: location
-  kind: 'Storage'   
-  sku: {
-    name: globalRedundancy ? 'Standard_GRS' : 'Standard_LRS' // if true --> GRS, else --> LRS
+module stg './storage.bicep' = if (deployStorate) {
+  name: 'storageDeploy'
+  scope: resourceGroup('another-rg') // this will target another resrouce group in the same subsctiption
+  params: {
+    storageAccountName: 'armdemowf98761234'
   }
 }
 
-resource blob 'Microsoft.Storage/storageAccounts/blobServices@2018-07-01' = {
-  name: '${stg.name}/default/logs' // dependsOn will be added when the template is compiled
+// can also itirate through multiple versions of the module with "for" syntax
+//param deployments array = [
+//  'foo'
+//  'bar'
+//]
+
+//module stg './storage.bicep' = [for item in deployments: {
+//  name: '${item}storageDeploy'
+//}]
+
+var objectId = 'cf024e4c-f790-45eb-a992-5218c39bde1a' // change this AAD object ID. This is specific to the Microsoft tenant
+var contributor = 'b24988ac-6180-42a0-ab88-20f7382dd24c'
+resource rbac 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  name: guid(subscription().id, objectId, contributor)
+  properties: {
+    roleDefinitionId: contributor
+    principalId: objectId
+  }
 }
 
-output storageID string = stg.id // output resourceId of storage account
-output computedStorageName string = stg.name
-output blobEndpoint string = stg.properties.primaryEndpoints.blob // replacement for reference (...).*
+output storageName array = stg.outputs.containerProps
